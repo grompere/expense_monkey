@@ -1,0 +1,10 @@
+# Environment variables and secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Data files containing credit card transactions
+*.csv
