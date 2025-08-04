@@ -117,26 +117,6 @@ def main(input_filename, output_filename="processed_results.csv", sample_size=No
     
     print(f"✅ Processed data saved to {output_filename}")
     print(f"📊 Records processed: {len(processed_data_list)}")
-    
-"""
-    data_list_sample = random.sample(data_list,5)
-    print(data_list_sample)
-
-    processed_data_list = []
-    for index, (input_value, output_value) in enumerate(data_list_sample):
-        model_label = generation_with_backoff(input_value).text
-        agreement = output_value.strip() == model_label.strip()
-        processed_data_list.append((input_value, output_value, model_label, agreement))
-
-
-    disagreement_count = 0
-    for input_value, output_value, model_label, agreement in processed_data_list:
-        if agreement == False:
-            disagreement_count += 1
-            print(f"Input: '{input_value}'; \n My output: '{output_value}'; \n Model label: '{model_label}'\n")
-
-    print(f"Disagreements: '{disagreement_count}'; Disagreement rate: {disagreement_count/len(processed_data_list)}")
-"""
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process expense categorization data using Gemini API")
