@@ -8,3 +8,4 @@
 
 # Data files containing credit card transactions
 *.csv
+*.xlsx

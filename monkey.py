@@ -3,8 +3,14 @@ from pydantic import ValidationError
 import google.generativeai as genai
 import csv
 import random
+import argparse
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_random_exponential,
+)
 
-def main():
+def main(input_filename, output_filename="processed_results.csv", sample_size=None):
     try:
         # Load application settings
         settings = get_settings()
@@ -67,7 +73,10 @@ def main():
     """
     )
 
-    input_filename = "categorized_expenses_ground_truth_v4.csv"
+    # Implement exponential backoff & retry for the Gemini API call
+    @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
+    def generation_with_backoff(*args, **kwargs):
+        return model.generate_content(*args, **kwargs)
 
     data_list = []
 
@@ -78,15 +87,47 @@ def main():
             input_value = row[0]
             output_value = row[1]
             data_list.append((input_value,output_value))
-
+    
+    # Sample data if sample_size is specified
+    total_records = len(data_list)
+    if sample_size and sample_size < total_records:
+        data_to_process = random.sample(data_list, sample_size)
+        print(f"🎲 Randomly selected {sample_size} records out of {total_records} total records")
+    else:
+        data_to_process = data_list
+        if sample_size and sample_size >= total_records:
+            print(f"📋 Processing all {total_records} records (requested {sample_size}, but file only has {total_records})")
+        else:
+            print(f"📋 Processing all {total_records} records")
+    
+    processed_data_list = []
+    for index, (input_value, output_value) in enumerate(data_to_process):
+        model_label = generation_with_backoff(input_value).text
+        agreement = output_value.strip() == model_label.strip()
+        processed_data_list.append((input_value, output_value, model_label, agreement))
+    
+    # Output processed data to CSV file
+    print(f"📁 Processing input file: {input_filename}")
+    with open(output_filename, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        # Write header
+        writer.writerow(['Input', 'Expected_Output', 'Model_Label', 'Agreement'])
+        # Write data
+        writer.writerows(processed_data_list)
+    
+    print(f"✅ Processed data saved to {output_filename}")
+    print(f"📊 Records processed: {len(processed_data_list)}")
+    
+"""
     data_list_sample = random.sample(data_list,5)
     print(data_list_sample)
 
     processed_data_list = []
     for index, (input_value, output_value) in enumerate(data_list_sample):
-        model_label = model.generate_content(input_value).text
+        model_label = generation_with_backoff(input_value).text
         agreement = output_value.strip() == model_label.strip()
         processed_data_list.append((input_value, output_value, model_label, agreement))
+
 
     disagreement_count = 0
     for input_value, output_value, model_label, agreement in processed_data_list:
@@ -95,6 +136,22 @@ def main():
             print(f"Input: '{input_value}'; \n My output: '{output_value}'; \n Model label: '{model_label}'\n")
 
     print(f"Disagreements: '{disagreement_count}'; Disagreement rate: {disagreement_count/len(processed_data_list)}")
+"""
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Process expense categorization data using Gemini API")
+    parser.add_argument("input_filename", help="Path to the input CSV file to process")
+    parser.add_argument("-o", "--output", default="processed_results.csv", 
+                       help="Output CSV filename (default: processed_results.csv)")
+    parser.add_argument("-s", "--sample", type=int, default=None,
+                       help="Number of random records to process (default: process all records)")
+    
+    args = parser.parse_args()
+    
+    # Check if input file exists
+    import os
+    if not os.path.exists(args.input_filename):
+        print(f"❌ Error: Input file '{args.input_filename}' not found.")
+        exit(1)
+    
+    main(args.input_filename, args.output, args.sample)
